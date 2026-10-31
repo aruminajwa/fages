@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Subway Runner</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;overflow:hidden;font-family:system-ui,sans-serif;color:#fff;touch-action:none}
+canvas{display:block;margin:0 auto}
+#ui{position:fixed;top:10px;left:10px;font-size:20px;font-weight:700;text-shadow:2px 2px 4px #000}
+#over{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:10}
+#over h1{font-size:48px;margin-bottom:10px}
+#over p{font-size:22px;margin-bottom:20px}
+#over button{padding:14px 36px;font-size:20px;border:none;border-radius:12px;background:#ff6b35;color:#fff;cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<div id="ui">Score: 0 &nbsp; Coins: 0</div>
+<canvas id="c"></canvas>
+<div id="over"><h1>Game Over</h1><p id="final"></p><button id="restart">Main Lagi</button></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;function resize(){W=c.width=innerWidth;H=c.height=innerHeight;}resize();addEventListener('resize',resize);
+const LANE=[-1,0,1],LANEW=120;
+let player={lane:1,y:0,vy:0,jumping:false,sliding:false,slideT:0};
+let obstacles=[],coins=[],distance=0,score=0,coinCount=0,speed=6,running=true,frame=0;
+function spawnObs(){const lane=Math.floor(Math.random()*3);const type=Math.random()<0.5?'barrier':'train';obstacles.push({lane,type,z:0,h:type==='barrier'?60:90});}
+function spawnCoin(){const lane=Math.floor(Math.random()*3);coins.push({lane,z:0,y:0});}
+let spawnTimer=0,coinTimer=0;
+function reset(){player={lane:1,y:0,vy:0,jumping:false,sliding:false,slideT:0};obstacles=[];coins=[];distance=0;score=0;coinCount=0;speed=6;running=true;frame=0;spawnTimer=0;coinTimer=0;document.getElementById('over').style.display='none';}
+function jump(){if(!running)return;if(player.jumping||player.sliding)return;player.jumping=true;player.vy=-16;}
+function slide(){if(!running)return;if(player.jumping||player.sliding)return;player.sliding=true;player.slideT=30;}
+function moveLeft(){if(!running)return;if(player.lane>0)player.lane--;}
+function moveRight(){if(!running)return;if(player.lane<2)player.lane++;}
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft')moveLeft();if(e.key==='ArrowRight')moveRight();if(e.key==='ArrowUp'||e.key===' '){e.preventDefault();jump();}if(e.key==='ArrowDown')slide();});
+let touchStart=null;
+c.addEventListener('touchstart',e=>{const t=e.touches[0];touchStart={x:t.clientX,y:t.clientY,time:Date.now()};},{passive:true});
+c.addEventListener('touchend',e=>{if(!touchStart)return;const t=e.changedTouches[0];const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;const dt=Date.now()-touchStart.time;if(Math.abs(dx)>Math.abs(dy)){if(dx<-30)moveLeft();else if(dx>30)moveRight();}else{if(dy<-30)jump();else if(dy>30)slide();}touchStart=null;},{passive:true});
+document.getElementById('restart').onclick=reset;
+function update(){
+ if(!running)return;
+ frame++;
+ distance+=speed;score=Math.floor(distance/10);
+ speed=6+distance/800;
+ if(player.jumping){player.y+=player.vy;player.vy+=0.9;if(player.y>=0){player.y=0;player.jumping=false;player.vy=0;}}
+ if(player.sliding){player.slideT--;if(player.slideT<=0)player.sliding=false;}
+ spawnTimer++;if(spawnTimer>Math.max(40,90-distance/200)){spawnTimer=0;spawnObs();}
+ coinTimer++;if(coinTimer>25){coinTimer=0;spawnCoin();}
+ const pz=H*0.85;
+ obstacles.forEach(o=>o.z+=speed);coins.forEach(c=>c.z+=speed);
+ obstacles=obstacles.filter(o=>o.z<H+100);coins=coins.filter(c=>c.z<H+100);
+ // collision
+ obstacles.forEach(o=>{
+   if(o.z>pz-40&&o.z<pz+20&&o.lane===player.lane){
+     const playerH=player.sliding?30:(player.jumping?0:70);
+     const needH=o.type==='barrier'?50:80;
+     if(player.y>-20 && playerH<needH-10){running=false;document.getElementById('over').style.display='flex';document.getElementById('final').textContent='Score: '+score+'  Coins: '+coinCount;}
+   }
+ });
+ coins.forEach((cn,i)=>{
+   if(cn.z>pz-30&&cn.z<pz+20&&cn.lane===player.lane&&!cn.taken){cn.taken=true;coinCount++;coins.splice(i,1);}
+ });
+ document.getElementById('ui').innerHTML='Score: '+score+' &nbsp; Coins: '+coinCount;
+}
+function draw(){
+ ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);
+ // sky gradient
+ const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#4facfe');g.addColorStop(1,'#00f2fe');ctx.fillStyle=g;ctx.fillRect(0,0,W,H*0.55);
+ // road
+ const roadY=H*0.55;
+ ctx.fillStyle='#333';ctx.fillRect(0,roadY,W,H-roadY);
+ // lanes lines
+ ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.setLineDash([30,30]);
+ for(let i=1;i<3;i++){const x=W/2+(i-1.5)*LANEW;ctx.beginPath();ctx.moveTo(x,roadY);ctx.lineTo(x,H);ctx.stroke();}
+ ctx.setLineDash([]);
+ // center dashed
+ // draw obstacles
+ obstacles.forEach(o=>{
+   const scale=1+o.z/H*0.5;
+   const x=W/2+(o.lane-1)*LANEW*scale;
+   const y=roadY+o.z*0.6;
+   const w=LANEW*0.7*scale,h=o.h*scale;
+   ctx.fillStyle=o.type==='barrier'?'#ff9800':'#e53935';
+   ctx.fillRect(x-w/2,y-h,w,h);
+   ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(x-w/2,y-h,w,6);
+ });
+ // coins
+ coins.forEach(cn=>{
+   const scale=1+cn.z/H*0.5;
+   const x=W/2+(cn.lane-1)*LANEW*scale;
+   const y=roadY+cn.z*0.6-40;
+   ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(x,y,12*scale,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText('$',x,y+4);
+ });
+ // player
+ const pScale=1.2;
+ const px=W/2+(player.lane-1)*LANEW*pScale;
+ const py=roadY+ (H*0.35) + player.y;
+ const ph=player.sliding?40:70;
+ ctx.fillStyle='#4caf50';ctx.fillRect(px-25,py-ph,50,ph);
+ ctx.fillStyle='#fff';ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillText(player.sliding?'🏃':'🧍',px,py-5);
+ // hud
+}
+function loop(){update();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

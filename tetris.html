@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetris</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui,sans-serif;color:#fff}
+canvas{border:3px solid #fff;border-radius:6px;box-shadow:0 0 20px rgba(0,0,0,.5)}
+#info{margin-top:12px;font-size:18px;font-weight:700}
+#over{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:10}
+#over h1{font-size:48px;margin-bottom:10px}
+#over p{font-size:22px;margin-bottom:20px}
+#over button{padding:14px 36px;font-size:20px;border:none;border-radius:12px;background:#e53935;color:#fff;cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<canvas id="c" width="240" height="480"></canvas>
+<div id="info">Score: 0 &nbsp; Level: 1</div>
+<div id="over"><h1>Game Over</h1><p id="final"></p><button id="restart">Main Lagi</button></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const COLS=10,ROWS=20,BS=24;
+const COLORS=['#000','#00f0f0','#0000f0','#f0a000','#f0f000','#00f000','#a000f0','#f00000'];
+const SHAPES=[[[]],[[1,1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[1,1],[1,1]],[[0,1,1],[1,1,0]],[[1,1,0],[0,1,1]],[[0,1,0],[1,1,1]]];
+let board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+let piece,px,py,score=0,level=1,lines=0,gameOver=false,dropCounter=0,dropInterval=800,lastTime=0;
+function newPiece(){const t=Math.floor(Math.random()*7)+1;piece=SHAPES[t].map(r=>[...r]);px=Math.floor((COLS-piece[0].length)/2);py=0;if(collide(px,py,piece)){gameOver=true;document.getElementById('over').style.display='flex';document.getElementById('final').textContent='Score: '+score;}}
+function collide(x,y,p){for(let r=0;r<p.length;r++)for(let cc=0;cc<p[r].length;cc++)if(p[r][cc]){const nx=x+cc,ny=y+r;if(nx<0||nx>=COLS||ny>=ROWS)return true;if(ny>=0&&board[ny][nx])return true;}return false;}
+function rotate(p){const rows=p.length,cols=p[0].length;const np=Array.from({length:cols},()=>Array(rows).fill(0));for(let r=0;r<rows;r++)for(let cc=0;cc<cols;cc++)np[cc][rows-1-r]=p[r][cc];return np;}
+function lock(){piece.forEach((r,ri)=>r.forEach((v,ci)=>{if(v)board[py+ri][px+ci]=v;}));clearLines();newPiece();}
+function clearLines(){let cleared=0;for(let r=ROWS-1;r>=0;r--){if(board[r].every(v=>v)){board.splice(r,1);board.unshift(Array(COLS).fill(0));cleared++;r++;}}if(cleared){lines+=cleared;score+=cleared*100*level;level=Math.floor(lines/10)+1;dropInterval=Math.max(100,800-(level-1)*70);document.getElementById('info').innerHTML='Score: '+score+' &nbsp; Level: '+level;}}
+function move(dx){if(!gameOver&&!collide(px+dx,py,piece)){px+=dx;}}
+function drop(){if(!gameOver&&!collide(px,py+1,piece)){py++;}else if(!gameOver){lock();}}
+function hardDrop(){while(!collide(px,py+1,piece))py++;lock();}
+function rotatePiece(){const np=rotate(piece);if(!collide(px,py,np))piece=np;}
+addEventListener('keydown',e=>{
+ if(gameOver)return;
+ if(e.key==='ArrowLeft')move(-1);
+ if(e.key==='ArrowRight')move(1);
+ if(e.key==='ArrowDown')drop();
+ if(e.key==='ArrowUp')rotatePiece();
+ if(e.key===' ')hardDrop();
+});
+document.getElementById('restart').onclick=()=>{board=Array.from({length:ROWS},()=>Array(COLS).fill(0));score=0;level=1;lines=0;dropInterval=800;gameOver=false;document.getElementById('over').style.display='none';document.getElementById('info').innerHTML='Score: 0 &nbsp; Level: 1';newPiece();};
+function update(time=0){const delta=time-lastTime;lastTime=time;dropCounter+=delta;if(dropCounter>dropInterval){drop();dropCounter=0;}draw();if(!gameOver)requestAnimationFrame(update);}
+function draw(){
+ ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,c.width,c.height);
+ for(let r=0;r<ROWS;r++)for(let cc=0;cc<COLS;cc++){if(board[r][cc]){ctx.fillStyle=COLORS[board[r][cc]];ctx.fillRect(cc*BS,r*BS,BS-1,BS-1);}}
+ if(piece)piece.forEach((row,ri)=>row.forEach((v,ci)=>{if(v){ctx.fillStyle=COLORS[v];ctx.fillRect((px+ci)*BS,(py+ri)*BS,BS-1,BS-1);}}));
+ // grid
+ ctx.strokeStyle='rgba(255,255,255,.05)';
+ for(let r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*BS);ctx.lineTo(COLS*BS,r*BS);ctx.stroke();}
+ for(let cc=0;cc<=COLS;cc++){ctx.beginPath();ctx.moveTo(cc*BS,0);ctx.lineTo(cc*BS,ROWS*BS);ctx.stroke();}
+}
+newPiece();requestAnimationFrame(update);
+</script>
+</body>
+</html>
